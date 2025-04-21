@@ -1,11 +1,13 @@
 import { Plugin, PluginSettingTab, App, Setting } from "obsidian";
 
 interface AutoRevealSettings {
-  triggerWord: string;
+  whitelist: string;
+  blacklist: string;
 }
 
 const DEFAULT_SETTINGS: AutoRevealSettings = {
-  triggerWord: "",
+  whitelist: "",
+  blacklist: "",
 };
 
 export default class AutoRevealPlugin extends Plugin {
@@ -24,10 +26,37 @@ export default class AutoRevealPlugin extends Plugin {
 
         console.log("File opened:", file.path);
 
-        // Check if the trigger word is set and if the file path contains it
-        if (this.settings.triggerWord && !file.path.includes(this.settings.triggerWord)) {
-          console.log(`File path "${file.path}" does not contain "${this.settings.triggerWord}". Skipping reveal.`);
-          return;
+        const whitelist = this.settings.whitelist
+          .split(",")
+          .map((word) => word.trim())
+          .filter((word) => word !== "");
+        const blacklist = this.settings.blacklist
+          .split(",")
+          .map((word) => word.trim())
+          .filter((word) => word !== "");
+
+        let shouldReveal = true;
+
+        // Check whitelist
+        if (whitelist.length > 0) {
+          shouldReveal = whitelist.some((word) => file.path.includes(word));
+          if (!shouldReveal) {
+            console.log(
+              `File path "${file.path}" does not contain any of the whitelisted words. Skipping reveal.`
+            );
+            return;
+          }
+        }
+
+        // Check blacklist
+        if (blacklist.length > 0) {
+          shouldReveal = !blacklist.some((word) => file.path.includes(word));
+          if (!shouldReveal) {
+            console.log(
+              `File path "${file.path}" contains one of the blacklisted words. Skipping reveal.`
+            );
+            return;
+          }
         }
 
         const explorerLeaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
@@ -80,14 +109,27 @@ class AutoRevealSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "Auto Reveal Settings" });
 
     new Setting(containerEl)
-      .setName("Trigger Word")
-      .setDesc("Only reveal the file in the explorer if its path contains this word (case-sensitive). Leave empty to always reveal.")
+      .setName("Whitelist")
+      .setDesc("Only reveal the file if its path contains at least one of these words (case-sensitive), separated by commas. Leave empty to disable whitelist.")
       .addText((text) =>
         text
-          .setPlaceholder("e.g., Daily Notes")
-          .setValue(this.plugin.settings.triggerWord)
+          .setPlaceholder("e.g., Daily,Project A")
+          .setValue(this.plugin.settings.whitelist)
           .onChange(async (value) => {
-            this.plugin.settings.triggerWord = value;
+            this.plugin.settings.whitelist = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Blacklist")
+      .setDesc("Never reveal the file if its path contains any of these words (case-sensitive), separated by commas.")
+      .addText((text) =>
+        text
+          .setPlaceholder("e.g., Archive,Temp")
+          .setValue(this.plugin.settings.blacklist)
+          .onChange(async (value) => {
+            this.plugin.settings.blacklist = value;
             await this.plugin.saveSettings();
           })
       );
