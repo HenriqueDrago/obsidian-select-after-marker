@@ -125,7 +125,6 @@ export default class AutoRevealPlugin extends Plugin {
   }
 
   async manageGitCloseButton() {
-
     const appAny = this.app as any;
     const obsidianGit = appAny.plugins.getPlugin("obsidian-git");
     const commandId = "obsidian-git:backup-and-close";
@@ -150,6 +149,8 @@ export default class AutoRevealPlugin extends Plugin {
       if (!this.statusBarGitCloseButton) {
         this.statusBarGitCloseButton = this.addStatusBarItem();
         this.statusBarGitCloseButton.setText("Git Close");
+        // Add a CSS class for hover effect
+        this.statusBarGitCloseButton.addClass("auto-reveal-git-close-button");
         this.statusBarGitCloseButton.addEventListener("click", this.executeGitCloseCommand);
       }
     } else {
