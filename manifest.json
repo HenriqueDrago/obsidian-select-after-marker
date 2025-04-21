@@ -1,9 +1,9 @@
 {
   "id": "auto-reveal-on-open",
   "name": "Auto Reveal on Open",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "minAppVersion": "0.12.0",
-  "description": "Automatically reveals the current note in the file explorer when opened.",
+  "description": "Automatically reveals the current note in the file explorer when opened and close 'All properties' tab on obsidian start-up.",
   "author": "8D",
   "main": "main.js"
 }
