@@ -1,10 +1,11 @@
-import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf } from "obsidian";
+import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf, Notice } from "obsidian";
 
 interface AutoRevealSettings {
   enableAutoReveal: boolean;
   whitelist: string;
   blacklist: string;
   autoCloseAllProperties: boolean;
+  showGitCloseButton: boolean;
 }
 
 const DEFAULT_SETTINGS: AutoRevealSettings = {
@@ -12,10 +13,12 @@ const DEFAULT_SETTINGS: AutoRevealSettings = {
   whitelist: "",
   blacklist: "",
   autoCloseAllProperties: false,
+  showGitCloseButton: true,
 };
 
 export default class AutoRevealPlugin extends Plugin {
   settings: AutoRevealSettings;
+  gitCloseButton: any | undefined;
 
   async onload() {
     console.log("Auto Reveal plugin loaded");
@@ -88,6 +91,11 @@ export default class AutoRevealPlugin extends Plugin {
       if (this.settings.autoCloseAllProperties) {
         this.checkAndCloseAllProperties();
       }
+      this.maybeAddGitCloseButton();
+    });
+
+    this.app.workspace.on("active-leaf-change", () => {
+      this.maybeAddGitCloseButton(); // Re-evaluate button visibility on leaf change
     });
   }
 
@@ -115,6 +123,39 @@ export default class AutoRevealPlugin extends Plugin {
         }
       });
     }, 500);
+  }
+
+  async maybeAddGitCloseButton() {
+    const appAny = this.app as any;
+    if (this.settings.showGitCloseButton && !this.gitCloseButton) {
+      // Introduce a small delay
+      setTimeout(() => {
+        const obsidianGit = appAny.plugins.getPlugin("obsidian-git");
+        if (obsidianGit) {
+          const commandId = "obsidian-git:backup-and-close";
+          if (appAny.commands?.commands && appAny.commands.commands[commandId]) {
+            this.gitCloseButton = this.addRibbonIcon("git-fork", "Commit, Sync & Close", async () => {
+              try {
+                await appAny.commands.executeCommandById(commandId);
+                new Notice("Attempting to commit, sync, and close Obsidian.");
+              } catch (error) {
+                console.error("Error executing Obsidian Git command:", error);
+                new Notice("Error executing Git command.");
+              }
+            });
+          } else {
+            new Notice(`Obsidian Git command '${commandId}' not found.`);
+          }
+        } else {
+          new Notice("Obsidian Git plugin not found.");
+        }
+      }, 1000); // 1-second delay
+    } else if (!this.settings.showGitCloseButton && this.gitCloseButton) {
+      if (this.gitCloseButton.remove) {
+        this.gitCloseButton.remove();
+      }
+      this.gitCloseButton = undefined;
+    }
   }
 }
 
@@ -179,6 +220,18 @@ class AutoRevealSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.autoCloseAllProperties)
           .onChange(async (value) => {
             this.plugin.settings.autoCloseAllProperties = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+      new Setting(containerEl)
+      .setName("Show 'Commit, Sync & Close' Button")
+      .setDesc("Adds a button to the ribbon that executes the Obsidian Git command to commit, sync, and then close Obsidian (if Obsidian Git is installed).")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.showGitCloseButton)
+          .onChange(async (value) => {
+            this.plugin.settings.showGitCloseButton = value;
             await this.plugin.saveSettings();
           })
       );
