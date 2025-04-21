@@ -1,11 +1,11 @@
-import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf, Notice } from "obsidian";
+import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf, Notice, MarkdownView } from "obsidian";
 
 interface AutoRevealSettings {
   enableAutoReveal: boolean;
   whitelist: string;
   blacklist: string;
   autoCloseAllProperties: boolean;
-  showGitCloseButton: boolean;
+  gitButtonLocation: "ribbon" | "statusbar" | "both" | "none";
 }
 
 const DEFAULT_SETTINGS: AutoRevealSettings = {
@@ -13,12 +13,13 @@ const DEFAULT_SETTINGS: AutoRevealSettings = {
   whitelist: "",
   blacklist: "",
   autoCloseAllProperties: false,
-  showGitCloseButton: true,
+  gitButtonLocation: "ribbon",
 };
 
 export default class AutoRevealPlugin extends Plugin {
   settings: AutoRevealSettings;
-  gitCloseButton: any | undefined;
+  ribbonGitCloseButton: any | undefined;
+  statusBarGitCloseButton: HTMLElement | undefined;
 
   async onload() {
     console.log("Auto Reveal plugin loaded");
@@ -91,16 +92,13 @@ export default class AutoRevealPlugin extends Plugin {
       if (this.settings.autoCloseAllProperties) {
         this.checkAndCloseAllProperties();
       }
-      this.maybeAddGitCloseButton();
-    });
-
-    this.app.workspace.on("active-leaf-change", () => {
-      this.maybeAddGitCloseButton(); // Re-evaluate button visibility on leaf change
+      this.manageGitCloseButton();
     });
   }
 
   onunload() {
     console.log("Auto Reveal plugin unloaded");
+    this.removeAllGitCloseButtons();
   }
 
   async loadSettings() {
@@ -109,6 +107,7 @@ export default class AutoRevealPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+    this.manageGitCloseButton(); // Update button visibility based on settings
   }
 
   async checkAndCloseAllProperties() {
@@ -125,36 +124,73 @@ export default class AutoRevealPlugin extends Plugin {
     }, 500);
   }
 
-  async maybeAddGitCloseButton() {
+  async manageGitCloseButton() {
+
     const appAny = this.app as any;
-    if (this.settings.showGitCloseButton && !this.gitCloseButton) {
-      // Introduce a small delay
-      setTimeout(() => {
-        const obsidianGit = appAny.plugins.getPlugin("obsidian-git");
-        if (obsidianGit) {
-          const commandId = "obsidian-git:backup-and-close";
-          if (appAny.commands?.commands && appAny.commands.commands[commandId]) {
-            this.gitCloseButton = this.addRibbonIcon("git-fork", "Commit, Sync & Close", async () => {
-              try {
-                await appAny.commands.executeCommandById(commandId);
-                new Notice("Attempting to commit, sync, and close Obsidian.");
-              } catch (error) {
-                console.error("Error executing Obsidian Git command:", error);
-                new Notice("Error executing Git command.");
-              }
-            });
-          } else {
-            new Notice(`Obsidian Git command '${commandId}' not found.`);
-          }
-        } else {
-          new Notice("Obsidian Git plugin not found.");
-        }
-      }, 1000); // 1-second delay
-    } else if (!this.settings.showGitCloseButton && this.gitCloseButton) {
-      if (this.gitCloseButton.remove) {
-        this.gitCloseButton.remove();
+    const obsidianGit = appAny.plugins.getPlugin("obsidian-git");
+    const commandId = "obsidian-git:backup-and-close";
+
+    if (!obsidianGit || !appAny.commands?.commands?.[commandId]) {
+      this.removeAllGitCloseButtons();
+      new Notice(obsidianGit ? `Obsidian Git command '${commandId}' not found.` : "Obsidian Git plugin not found.");
+      return;
+    }
+
+    // Handle Ribbon Button
+    if (this.settings.gitButtonLocation === "ribbon" || this.settings.gitButtonLocation === "both") {
+      if (!this.ribbonGitCloseButton) {
+        this.ribbonGitCloseButton = this.addRibbonIcon("git-fork", "Commit, Sync & Close", this.executeGitCloseCommand);
       }
-      this.gitCloseButton = undefined;
+    } else {
+      this.removeRibbonButton();
+    }
+
+    // Handle Status Bar Button
+    if (this.settings.gitButtonLocation === "statusbar" || this.settings.gitButtonLocation === "both") {
+      if (!this.statusBarGitCloseButton) {
+        this.statusBarGitCloseButton = this.addStatusBarItem();
+        this.statusBarGitCloseButton.setText("Git Close");
+        this.statusBarGitCloseButton.addEventListener("click", this.executeGitCloseCommand);
+      }
+    } else {
+      this.removeStatusBarButton();
+    }
+
+    // Handle "none" case
+    if (this.settings.gitButtonLocation === "none") {
+      this.removeRibbonButton();
+      this.removeStatusBarButton();
+    }
+  }
+
+  executeGitCloseCommand = async () => {
+    const appAny = this.app as any;
+    const commandId = "obsidian-git:backup-and-close";
+    try {
+      await appAny.commands.executeCommandById(commandId);
+      new Notice("Attempting to commit, sync, and close Obsidian.");
+    } catch (error) {
+      console.error("Error executing Obsidian Git command:", error);
+      new Notice("Error executing Git command.");
+    }
+  };
+
+  removeAllGitCloseButtons() {
+    this.removeRibbonButton();
+    this.removeStatusBarButton();
+  }
+
+  removeRibbonButton() {
+    if (this.ribbonGitCloseButton && this.ribbonGitCloseButton.remove) {
+      this.ribbonGitCloseButton.remove();
+      this.ribbonGitCloseButton = undefined;
+    }
+  }
+
+  removeStatusBarButton() {
+    if (this.statusBarGitCloseButton) {
+      this.statusBarGitCloseButton.remove();
+      this.statusBarGitCloseButton = undefined;
     }
   }
 }
@@ -224,14 +260,20 @@ class AutoRevealSettingTab extends PluginSettingTab {
           })
       );
 
-      new Setting(containerEl)
-      .setName("Show 'Commit, Sync & Close' Button")
-      .setDesc("Adds a button to the ribbon that executes the Obsidian Git command to commit, sync, and then close Obsidian (if Obsidian Git is installed).")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.showGitCloseButton)
-          .onChange(async (value) => {
-            this.plugin.settings.showGitCloseButton = value;
+    new Setting(containerEl)
+      .setName("Git Button Location")
+      .setDesc("Choose where the 'Commit, Sync & Close' button should appear.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions({
+            ribbon: "Ribbon",
+            statusbar: "Status Bar",
+            both: "Both",
+            none: "None",
+          })
+          .setValue(this.plugin.settings.gitButtonLocation)
+          .onChange(async (value: "ribbon" | "statusbar" | "both" | "none") => {
+            this.plugin.settings.gitButtonLocation = value;
             await this.plugin.saveSettings();
           })
       );
