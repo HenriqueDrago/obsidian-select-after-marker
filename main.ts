@@ -137,9 +137,6 @@ export default class HDCustomPlugin extends Plugin {
     );
   }
 
-  /**
-   * Returns all loaded git view leaves
-   */
   private getGitViews(): WorkspaceLeaf[] {
     return this.app.workspace.getLeavesOfType('git-view');
   }
