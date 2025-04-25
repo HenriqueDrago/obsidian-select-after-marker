@@ -1,104 +1,63 @@
 import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf, Notice, MarkdownView } from "obsidian";
+import { GIT_BACKUP_SYNC_CLOSE_BUTTON_ICON } from './src/constants';
 
-interface AutoRevealSettings {
-  enableAutoReveal: boolean;
-  whitelist: string;
-  blacklist: string;
+interface HDCustomPluginSettings {
+
   autoCloseAllProperties: boolean;
-  gitButtonLocation: "ribbon" | "statusbar" | "both" | "none";
+  addGitButton: boolean;
 }
 
-const DEFAULT_SETTINGS: AutoRevealSettings = {
-  enableAutoReveal: true,
-  whitelist: "",
-  blacklist: "",
+const DEFAULT_SETTINGS: HDCustomPluginSettings = {
   autoCloseAllProperties: false,
-  gitButtonLocation: "ribbon",
+  addGitButton: true,
 };
 
-export default class AutoRevealPlugin extends Plugin {
-  settings: AutoRevealSettings;
-  ribbonGitCloseButton: any | undefined;
-  statusBarGitCloseButton: HTMLElement | undefined;
+export default class HDCustomPlugin extends Plugin {
+  settings: HDCustomPluginSettings;
 
   async onload() {
-    console.log("Auto Reveal plugin loaded");
+    console.log("8D's Custom Plugin loaded");
 
     await this.loadSettings();
 
-    this.addSettingTab(new AutoRevealSettingTab(this.app, this));
-
-    this.registerEvent(
-      this.app.workspace.on("file-open", async (file) => {
-        if (!file || !this.settings.enableAutoReveal) return;
-
-        console.log("File opened:", file.path);
-
-        const whitelist = this.settings.whitelist
-          .split(",")
-          .map((word) => word.trim())
-          .filter((word) => word !== "");
-        const blacklist = this.settings.blacklist
-          .split(",")
-          .map((word) => word.trim())
-          .filter((word) => word !== "");
-
-        let shouldReveal = true;
-
-        // Check whitelist
-        if (whitelist.length > 0) {
-          shouldReveal = whitelist.some((word) => file.path.includes(word));
-          if (!shouldReveal) {
-            console.log(
-              `File path "${file.path}" does not contain any of the whitelisted words. Skipping reveal.`
-            );
-            return;
-          }
-        }
-
-        // Check blacklist
-        if (blacklist.length > 0) {
-          shouldReveal = !blacklist.some((word) => file.path.includes(word));
-          if (!shouldReveal) {
-            console.log(
-              `File path "${file.path}" contains one of the blacklisted words. Skipping reveal.`
-            );
-            return;
-          }
-        }
-
-        const explorerLeaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
-
-        if (!explorerLeaf) {
-          console.warn("File explorer is not open.");
-          return;
-        }
-
-        setTimeout(() => {
-          const appAny = this.app as any;
-          const command = appAny.commands?.commands["file-explorer:reveal-active-file"];
-          if (command && shouldReveal) {
-            appAny.commands.executeCommandById("file-explorer:reveal-active-file");
-            console.log("Executed reveal command");
-          } else if (!command) {
-            console.warn("Reveal command not found");
-          }
-        }, 300);
-      })
-    );
+    this.addSettingTab(new HDCustomPluginSettingTab(this.app, this));
 
     this.app.workspace.onLayoutReady(() => {
       // Run the auto-close logic once on startup if the setting is enabled
       if (this.settings.autoCloseAllProperties) {
         this.checkAndCloseAllProperties();
       }
-      this.manageGitCloseButton();
     });
+
+    if(this.settings.addGitButton) {
+      this.app.workspace.onLayoutReady(() => {
+        const gitViews = this.getGitViews();
+        gitViews.forEach((exp) => {
+          this.addGitButton(exp);
+        });
+      });
+  
+      // Git Views that get opened later on
+      this.registerEvent(
+        this.app.workspace.on('layout-change', () => {
+          const gitViews = this.getGitViews();
+          gitViews.forEach((exp) => {
+            this.addGitButton(exp);
+          });
+        })
+      );
+    }
+    
   }
 
   onunload() {
-    console.log("Auto Reveal plugin unloaded");
-    this.removeAllGitCloseButtons();
+    console.log("8D's Custom Plugin unloaded");
+    // Remove all git buttons
+    const gitViews = this.getGitViews();
+    gitViews.forEach((exp) => {
+      this.removeGitButton(exp);
+    });
+
   }
 
   async loadSettings() {
@@ -107,7 +66,9 @@ export default class AutoRevealPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
-    this.manageGitCloseButton(); // Update button visibility based on settings
+    if (this.settings.autoCloseAllProperties) {
+      this.checkAndCloseAllProperties();
+    }
   }
 
   async checkAndCloseAllProperties() {
@@ -124,46 +85,6 @@ export default class AutoRevealPlugin extends Plugin {
     }, 500);
   }
 
-  async manageGitCloseButton() {
-    const appAny = this.app as any;
-    const obsidianGit = appAny.plugins.getPlugin("obsidian-git");
-    const commandId = "obsidian-git:backup-and-close";
-
-    if (!obsidianGit || !appAny.commands?.commands?.[commandId]) {
-      this.removeAllGitCloseButtons();
-      new Notice(obsidianGit ? `Obsidian Git command '${commandId}' not found.` : "Obsidian Git plugin not found.");
-      return;
-    }
-
-    // Handle Ribbon Button
-    if (this.settings.gitButtonLocation === "ribbon" || this.settings.gitButtonLocation === "both") {
-      if (!this.ribbonGitCloseButton) {
-        this.ribbonGitCloseButton = this.addRibbonIcon("git-fork", "Commit, Sync & Close", this.executeGitCloseCommand);
-      }
-    } else {
-      this.removeRibbonButton();
-    }
-
-    // Handle Status Bar Button
-    if (this.settings.gitButtonLocation === "statusbar" || this.settings.gitButtonLocation === "both") {
-      if (!this.statusBarGitCloseButton) {
-        this.statusBarGitCloseButton = this.addStatusBarItem();
-        this.statusBarGitCloseButton.setText("Git Close");
-        // Add a CSS class for hover effect
-        this.statusBarGitCloseButton.addClass("auto-reveal-git-close-button");
-        this.statusBarGitCloseButton.addEventListener("click", this.executeGitCloseCommand);
-      }
-    } else {
-      this.removeStatusBarButton();
-    }
-
-    // Handle "none" case
-    if (this.settings.gitButtonLocation === "none") {
-      this.removeRibbonButton();
-      this.removeStatusBarButton();
-    }
-  }
-
   executeGitCloseCommand = async () => {
     const appAny = this.app as any;
     const commandId = "obsidian-git:backup-and-close";
@@ -176,30 +97,65 @@ export default class AutoRevealPlugin extends Plugin {
     }
   };
 
-  removeAllGitCloseButtons() {
-    this.removeRibbonButton();
-    this.removeStatusBarButton();
+  private addGitButton(gitView: WorkspaceLeaf): void {
+    const container = gitView.view.containerEl as HTMLDivElement;
+    const navContainer = container.querySelector(
+      'div.nav-buttons-container'
+    ) as HTMLDivElement;
+    if (!navContainer) {
+      return;
+    }
+
+    const existingButton = this.getGitButton(gitView);
+    if (existingButton) {
+      return;
+    }
+
+    const newIcon = document.createElement('div');
+    this.setButtonProperties(newIcon);
+    newIcon.className = 'clickable-icon nav-action-button git-sync-and-close-button';
+    this.registerDomEvent(newIcon, 'click', () => {
+      this.executeGitCloseCommand();
+    });
+    navContainer.appendChild(newIcon);
   }
 
-  removeRibbonButton() {
-    if (this.ribbonGitCloseButton && this.ribbonGitCloseButton.remove) {
-      this.ribbonGitCloseButton.remove();
-      this.ribbonGitCloseButton = undefined;
+  private removeGitButton(gitView: WorkspaceLeaf): void {
+    const button = this.getGitButton(gitView);
+    if (button) {
+      button.remove();
     }
   }
 
-  removeStatusBarButton() {
-    if (this.statusBarGitCloseButton) {
-      this.statusBarGitCloseButton.remove();
-      this.statusBarGitCloseButton = undefined;
-    }
+  private setButtonProperties(
+      button: HTMLElement
+  ): void {
+    button.innerHTML = GIT_BACKUP_SYNC_CLOSE_BUTTON_ICON;
+    button.setAttribute(
+        'aria-label',
+        'Backup, Sync and Close App'
+    );
   }
+
+  /**
+   * Returns all loaded git view leaves
+   */
+  private getGitViews(): WorkspaceLeaf[] {
+    return this.app.workspace.getLeavesOfType('git-view');
+  }
+
+  private getGitButton(gitView: WorkspaceLeaf): HTMLDivElement | null {
+    return gitView.view.containerEl.querySelector(
+      '.git-sync-and-close-button'
+    );
+  }
+
 }
 
-class AutoRevealSettingTab extends PluginSettingTab {
-  plugin: AutoRevealPlugin;
+class HDCustomPluginSettingTab extends PluginSettingTab {
+  plugin: HDCustomPlugin;
 
-  constructor(app: App, plugin: AutoRevealPlugin) {
+  constructor(app: App, plugin: HDCustomPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -209,45 +165,7 @@ class AutoRevealSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Auto Reveal Settings" });
-
-    new Setting(containerEl)
-      .setName("Enable Auto Reveal")
-      .setDesc("Master toggle to enable or disable the automatic revealing of the active file in the file explorer.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableAutoReveal)
-          .onChange(async (value) => {
-            this.plugin.settings.enableAutoReveal = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Whitelist")
-      .setDesc("Only reveal the file if its path contains at least one of these words (case-sensitive), separated by commas. Only active if 'Enable Auto Reveal' is on. Leave empty to disable whitelist.")
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g., Daily,Project A")
-          .setValue(this.plugin.settings.whitelist)
-          .onChange(async (value) => {
-            this.plugin.settings.whitelist = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Blacklist")
-      .setDesc("Never reveal the file if its path contains any of these words (case-sensitive), separated by commas. Only active if 'Enable Auto Reveal' is on.")
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g., Archive,Temp")
-          .setValue(this.plugin.settings.blacklist)
-          .onChange(async (value) => {
-            this.plugin.settings.blacklist = value;
-            await this.plugin.saveSettings();
-          })
-      );
+    containerEl.createEl("h2", { text: "8D's Custom Plugin Settings" });
 
     new Setting(containerEl)
       .setName("Auto Close 'All Properties'")
@@ -261,20 +179,14 @@ class AutoRevealSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
-      .setName("Git Button Location")
-      .setDesc("Choose where the 'Commit, Sync & Close' button should appear.")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOptions({
-            ribbon: "Ribbon",
-            statusbar: "Status Bar",
-            both: "Both",
-            none: "None",
-          })
-          .setValue(this.plugin.settings.gitButtonLocation)
-          .onChange(async (value: "ribbon" | "statusbar" | "both" | "none") => {
-            this.plugin.settings.gitButtonLocation = value;
+      new Setting(containerEl)
+      .setName("Add Git Button")
+      .setDesc("Add a button to the 'Git Source Control' that initiates Git Backup&Sync then closes the app.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.addGitButton)
+          .onChange(async (value) => {
+            this.plugin.settings.addGitButton = value;
             await this.plugin.saveSettings();
           })
       );

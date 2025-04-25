@@ -1,2 +1,2 @@
-# Obsidian Auto Reveal On Open Plugin
-Obsidian plugin that automatically reveals the current note in the file explorer when opened.
+# 8D's Custom Obsidian Plugin
+A personal obsidian plugin that had several functions.
