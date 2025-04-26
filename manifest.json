@@ -1,9 +1,9 @@
 {
-  "id": "8D-custom-plugin",
-  "name": "8D's Custom Plugin",
+  "id": "obsidian-close-all-properties",
+  "name": "Close 'All properties'",
   "version": "1.0.0",
   "minAppVersion": "0.12.0",
-  "description": "Close 'All properties' tab on obsidian start-up and add a button that commits and sync with git then closes obsidian.",
+  "description": "Close 'All properties' tab on obsidian start-up.",
   "author": "8D",
   "main": "main.js"
 }
