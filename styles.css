@@ -1,0 +1,20 @@
+/* Style the container for the buttons */
+.git-actions-view-container {
+  /* Optional padding if you want space around the buttons */
+  padding: 10px;
+}
+
+/* Style the button group for horizontal layout */
+.git-action-icon-button-group {
+  display: flex; /* Use flexbox for horizontal layout */
+  gap: 8px; /* Add space between buttons */
+  flex-wrap: wrap; /* Allow buttons to wrap if the panel is too narrow */
+  align-items: center; /* Vertically center the icons */
+}
+
+.word-count-display {
+  color: var(--nav-item-color);
+  font-size: var(--nav-item-size);
+  font-weight: var(--nav-item-weight);
+  line-height: var(--line-height-tight);
+}
