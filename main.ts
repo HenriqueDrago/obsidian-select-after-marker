@@ -1,6 +1,6 @@
 import { Plugin } from "obsidian";
 
-export default class HDCustomPlugin extends Plugin {
+export default class CloseAllPropertiesPlugin extends Plugin {
 
   async onload() {
     console.log("Close 'All properties' plugin loaded.");
