@@ -49,11 +49,11 @@ export default class SelectAfterMarkerPlugin extends Plugin {
 
         // Add the command
         this.addCommand({
-            id: 'select-content-below-marker', // Updated command ID
-            name: 'Select text below marker or copy selected text', // Updated command name
+            id: 'select-content-below-marker',
+            name: 'Select text below marker or copy selected text',
             editorCallback: (editor: Editor, view: MarkdownView) => {
                 const content = editor.getValue();
-                const marker = this.settings.marker; // Use the configured marker
+                const marker = this.settings.marker;
                 const markerIndex = content.indexOf(marker);
 
                 if (markerIndex !== -1) {
