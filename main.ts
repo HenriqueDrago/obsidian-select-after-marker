@@ -8,7 +8,7 @@ import {
 	Notice,
 } from "obsidian";
 
-// Define the interface for our plugin settings
+// Define the interface for the plugin settings
 interface SelectAfterMarkerPluginSettings {
 	marker: string;
 	ignoreWhitespaceAfterMarker: boolean;
@@ -46,10 +46,11 @@ class SelectAfterMarkerPluginSettingTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("Enter your marker")
-					.setValue(this.plugin.settings.marker)
+					.setPlaceholder("Enter your marker") // Placeholder text for the input
+					.setValue(this.plugin.settings.marker) // Set the current value from settings
+					// When the value changes...
 					.onChange(async (value) => {
-						this.plugin.settings.marker = value;
+						this.plugin.settings.marker = value; // Update the settings with the new value
 						await this.plugin.saveSettings(); // Save settings when the value changes
 					})
 			);
@@ -62,22 +63,27 @@ class SelectAfterMarkerPluginSettingTab extends PluginSettingTab {
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.ignoreWhitespaceAfterMarker)
+					.setValue(this.plugin.settings.ignoreWhitespaceAfterMarker) // Set the current value from settings
+					// When the toggle changes...
 					.onChange(async (value) => {
-						this.plugin.settings.ignoreWhitespaceAfterMarker = value;
+						this.plugin.settings.ignoreWhitespaceAfterMarker = value; // Update the settings with the new value
 						await this.plugin.saveSettings(); // Save settings when the toggle changes
 					})
 			);
 	}
 }
 
+// Main plugin class
 export default class SelectAfterMarkerPlugin extends Plugin {
-	settings: SelectAfterMarkerPluginSettings;
+	settings: SelectAfterMarkerPluginSettings; // Declare settings variable
 
+	// Runs on plugin load
 	async onload() {
 		// Load settings when the plugin loads
 		await this.loadSettings();
 
+		// Add a command to select content below the marker
+		// This command can be triggered from the command palette or a hotkey
 		this.addCommand({
 			id: "select-content-below-marker",
 			name: "Select text below marker",
@@ -119,8 +125,9 @@ export default class SelectAfterMarkerPlugin extends Plugin {
 		);
 	}
 
+	// Runs when the plugin is unloaded
 	onunload() {
-		// Clean up resources if needed
+		// Nothing to unload
 	}
 
 	// Load settings from storage
@@ -128,7 +135,7 @@ export default class SelectAfterMarkerPlugin extends Plugin {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.loadData()
+			await this.loadData() // Load settings from storage (json file)
 		);
 	}
 
